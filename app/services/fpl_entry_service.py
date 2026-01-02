@@ -199,7 +199,11 @@ class FPLEntryService:
                         time.sleep(0.6 * (attempt + 1))
             time.sleep(sleep_between)  # be a good citizen
         return out
-
+    
+    def _get_bootstrap_data(self):
+        """Helper to get bootstrap-static data"""
+        return self._get(f"{self.base_url}/bootstrap-static/")
+    
     def optimize_transfer(self, entry_id: int, gameweek: Optional[int] = None):
         """
         Suggests optimal 1 free transfer to maximize expected points for next GW
