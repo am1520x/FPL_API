@@ -256,7 +256,7 @@ class FPLEntryService:
                 model += is_transfer_in[i] == 0
         
         # Limit to 1 free transfer
-        model += lpSum(float(is_transfer_in[i]) for i in df.index) <= 1
+        model += lpSum(is_transfer_in[i] for i in df.index) <= 1
         
         # Budget constraint
         model += lpSum(df.loc[i, 'now_cost'] * is_in_squad[i] for i in df.index) <= total_budget
@@ -298,7 +298,8 @@ class FPLEntryService:
                     "web_name": player['web_name'],
                     "team": int(player['team']),
                     "position": int(player['element_type']),
-                    "cost": float(player['now_cost'])
+                    "cost": float(player['now_cost']),
+                    "ep_next": float(player['ep_next'])
                 })
         
         return {
@@ -306,5 +307,7 @@ class FPLEntryService:
             "optimization_status": "success" if status == 1 else "failed",
             "transfer_in": transfer_in,
             "transfer_out": transfer_out,
-            "expected_points_gain": sum(p['ep_next'] for p in transfer_in) if transfer_in else 0
+            "expected_points_gain": (
+                sum(p['ep_next'] for p in transfer_in) - sum(p.get('ep_next', 0) for p in transfer_out)
+            ) if transfer_in and transfer_out else 0
         }
