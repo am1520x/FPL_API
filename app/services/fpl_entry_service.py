@@ -200,101 +200,101 @@ class FPLEntryService:
             time.sleep(sleep_between)  # be a good citizen
         return out
 
-        def optimize_transfer(self, entry_id: int, gameweek: Optional[int] = None):
-            """
-            Suggests optimal 1 free transfer to maximize expected points for next GW
-            """
-            # Get current gameweek if not provided
-            if gameweek is None:
-                gameweek = self.get_current_event()
-            
-            # Get current team picks
-            picks_data = self.get_entry_picks(entry_id, gameweek)
-            current_team_ids = [pick['element'] for pick in picks_data['picks']]
-            
-            # Get bootstrap data (all players)
-            bootstrap = self._get_bootstrap_data()
-            
-            # Convert to DataFrame
-            df = pd.DataFrame(bootstrap['elements'])
-            df = df.set_index(pd.Index(range(len(df))))
-            
-            # Get team value and bank
-            team_value = picks_data['entry_history']['value']
-            bank = picks_data['entry_history']['bank']
-            total_budget = team_value + bank
-            
-            # Setup optimization model
-            model = LpProblem("FPL_Transfer_Optimizer", LpMaximize)
-            
-            # Variables
-            is_in_squad = LpVariable.dicts("squad", df.index, cat="Binary")
-            is_transfer_in = LpVariable.dicts("transfer_in", df.index, cat="Binary")
-            
-            # Objective: Maximize next GW expected points
-            model += lpSum(df.loc[i, 'ep_next'] * is_in_squad[i] for i in df.index)
-            
-            # Constraints
-            # Total squad size = 15
-            model += lpSum(is_in_squad[i] for i in df.index) == 15
-            
-            # Transfer logic
-            for i in df.index:
-                if df.loc[i, 'id'] not in current_team_ids:
-                    model += is_transfer_in[i] >= is_in_squad[i]
-                else:
-                    model += is_transfer_in[i] == 0
-            
-            # Limit to 1 free transfer
-            model += lpSum(is_transfer_in[i] for i in df.index) <= 1
-            
-            # Budget constraint
-            model += lpSum(df.loc[i, 'now_cost'] * is_in_squad[i] for i in df.index) <= total_budget
-            
-            # Position constraints (1=GKP, 2=DEF, 3=MID, 4=FWD)
-            model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'element_type'] == 1) == 2
-            model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'element_type'] == 2) == 5
-            model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'element_type'] == 3) == 5
-            model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'element_type'] == 4) == 3
-            
-            # Club constraint: Max 3 players per team
-            for team_id in df['team_code'].unique():
-                model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'team_code'] == team_id) <= 3
-            
-            # Solve
-            status = model.solve()
-            
-            # Extract results
-            transfer_in = []
-            for i in df.index:
-                if is_transfer_in[i].varValue == 1:
-                    player = df.loc[i]
-                    transfer_in.append({
-                        "id": int(player['id']),
-                        "web_name": player['web_name'],
-                        "team": int(player['team']),
-                        "position": int(player['element_type']),
-                        "cost": player['now_cost'],
-                        "ep_next": player['ep_next']
-                    })
-            
-            new_squad_ids = [df.loc[i, 'id'] for i in df.index if is_in_squad[i].varValue == 1]
-            transfer_out = []
-            for old_id in current_team_ids:
-                if old_id not in new_squad_ids:
-                    player = df[df['id'] == old_id].iloc[0]
-                    transfer_out.append({
-                        "id": int(old_id),
-                        "web_name": player['web_name'],
-                        "team": int(player['team']),
-                        "position": int(player['element_type']),
-                        "cost": player['now_cost']
-                    })
-            
-            return {
-                "gameweek": gameweek,
-                "optimization_status": "success" if status == 1 else "failed",
-                "transfer_in": transfer_in,
-                "transfer_out": transfer_out,
-                "expected_points_gain": sum(p['ep_next'] for p in transfer_in) if transfer_in else 0
-            }
+    def optimize_transfer(self, entry_id: int, gameweek: Optional[int] = None):
+        """
+        Suggests optimal 1 free transfer to maximize expected points for next GW
+        """
+        # Get current gameweek if not provided
+        if gameweek is None:
+            gameweek = self.get_current_event()
+        
+        # Get current team picks
+        picks_data = self.get_entry_picks(entry_id, gameweek)
+        current_team_ids = [pick['element'] for pick in picks_data['picks']]
+        
+        # Get bootstrap data (all players)
+        bootstrap = self._get_bootstrap_data()
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(bootstrap['elements'])
+        df = df.set_index(pd.Index(range(len(df))))
+        
+        # Get team value and bank
+        team_value = picks_data['entry_history']['value']
+        bank = picks_data['entry_history']['bank']
+        total_budget = team_value + bank
+        
+        # Setup optimization model
+        model = LpProblem("FPL_Transfer_Optimizer", LpMaximize)
+        
+        # Variables
+        is_in_squad = LpVariable.dicts("squad", df.index, cat="Binary")
+        is_transfer_in = LpVariable.dicts("transfer_in", df.index, cat="Binary")
+        
+        # Objective: Maximize next GW expected points
+        model += lpSum(df.loc[i, 'ep_next'] * is_in_squad[i] for i in df.index)
+        
+        # Constraints
+        # Total squad size = 15
+        model += lpSum(is_in_squad[i] for i in df.index) == 15
+        
+        # Transfer logic
+        for i in df.index:
+            if df.loc[i, 'id'] not in current_team_ids:
+                model += is_transfer_in[i] >= is_in_squad[i]
+            else:
+                model += is_transfer_in[i] == 0
+        
+        # Limit to 1 free transfer
+        model += lpSum(is_transfer_in[i] for i in df.index) <= 1
+        
+        # Budget constraint
+        model += lpSum(df.loc[i, 'now_cost'] * is_in_squad[i] for i in df.index) <= total_budget
+        
+        # Position constraints (1=GKP, 2=DEF, 3=MID, 4=FWD)
+        model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'element_type'] == 1) == 2
+        model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'element_type'] == 2) == 5
+        model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'element_type'] == 3) == 5
+        model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'element_type'] == 4) == 3
+        
+        # Club constraint: Max 3 players per team
+        for team_id in df['team_code'].unique():
+            model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'team_code'] == team_id) <= 3
+        
+        # Solve
+        status = model.solve()
+        
+        # Extract results
+        transfer_in = []
+        for i in df.index:
+            if is_transfer_in[i].varValue == 1:
+                player = df.loc[i]
+                transfer_in.append({
+                    "id": int(player['id']),
+                    "web_name": player['web_name'],
+                    "team": int(player['team']),
+                    "position": int(player['element_type']),
+                    "cost": player['now_cost'],
+                    "ep_next": player['ep_next']
+                })
+        
+        new_squad_ids = [df.loc[i, 'id'] for i in df.index if is_in_squad[i].varValue == 1]
+        transfer_out = []
+        for old_id in current_team_ids:
+            if old_id not in new_squad_ids:
+                player = df[df['id'] == old_id].iloc[0]
+                transfer_out.append({
+                    "id": int(old_id),
+                    "web_name": player['web_name'],
+                    "team": int(player['team']),
+                    "position": int(player['element_type']),
+                    "cost": player['now_cost']
+                })
+        
+        return {
+            "gameweek": gameweek,
+            "optimization_status": "success" if status == 1 else "failed",
+            "transfer_in": transfer_in,
+            "transfer_out": transfer_out,
+            "expected_points_gain": sum(p['ep_next'] for p in transfer_in) if transfer_in else 0
+        }
