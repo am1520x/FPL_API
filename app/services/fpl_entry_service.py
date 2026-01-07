@@ -199,7 +199,11 @@ class FPLEntryService:
                         time.sleep(0.6 * (attempt + 1))
             time.sleep(sleep_between)  # be a good citizen
         return out
-
+    
+    def _get_bootstrap_data(self):
+        """Helper to get bootstrap-static data"""
+        return self._get(f"{self.base_url}/bootstrap-static/")
+    
     def optimize_transfer(self, entry_id: int, gameweek: Optional[int] = None):
         """
         Suggests optimal 1 free transfer to maximize expected points for next GW
@@ -218,6 +222,12 @@ class FPLEntryService:
         # Convert to DataFrame
         df = pd.DataFrame(bootstrap['elements'])
         df = df.set_index(pd.Index(range(len(df))))
+
+        df['now_cost'] = pd.to_numeric(df['now_cost'], errors='coerce').fillna(0)
+        df['ep_next'] = pd.to_numeric(df['ep_next'], errors='coerce').fillna(0)
+        df['element_type'] = pd.to_numeric(df['element_type'], errors='coerce').astype(int)
+        df['team_code'] = pd.to_numeric(df['team_code'], errors='coerce').astype(int)
+        df['id'] = pd.to_numeric(df['id'], errors='coerce').astype(int)
         
         # Get team value and bank
         team_value = picks_data['entry_history']['value']
@@ -232,7 +242,7 @@ class FPLEntryService:
         is_transfer_in = LpVariable.dicts("transfer_in", df.index, cat="Binary")
         
         # Objective: Maximize next GW expected points
-        model += lpSum(df.loc[i, 'ep_next'] * is_in_squad[i] for i in df.index)
+        model += lpSum(float(df.loc[i, 'ep_next']) * is_in_squad[i] for i in df.index)
         
         # Constraints
         # Total squad size = 15
@@ -240,7 +250,7 @@ class FPLEntryService:
         
         # Transfer logic
         for i in df.index:
-            if df.loc[i, 'id'] not in current_team_ids:
+            if int(df.loc[i, 'id']) not in current_team_ids:
                 model += is_transfer_in[i] >= is_in_squad[i]
             else:
                 model += is_transfer_in[i] == 0
@@ -252,14 +262,14 @@ class FPLEntryService:
         model += lpSum(df.loc[i, 'now_cost'] * is_in_squad[i] for i in df.index) <= total_budget
         
         # Position constraints (1=GKP, 2=DEF, 3=MID, 4=FWD)
-        model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'element_type'] == 1) == 2
-        model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'element_type'] == 2) == 5
-        model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'element_type'] == 3) == 5
-        model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'element_type'] == 4) == 3
+        model += lpSum(is_in_squad[i] for i in df.index if int(df.loc[i, 'element_type']) == 1) == 2
+        model += lpSum(is_in_squad[i] for i in df.index if int(df.loc[i, 'element_type']) == 2) == 5
+        model += lpSum(is_in_squad[i] for i in df.index if int(df.loc[i, 'element_type']) == 3) == 5
+        model += lpSum(is_in_squad[i] for i in df.index if int(df.loc[i, 'element_type']) == 4) == 3
         
         # Club constraint: Max 3 players per team
         for team_id in df['team_code'].unique():
-            model += lpSum(is_in_squad[i] for i in df.index if df.loc[i, 'team_code'] == team_id) <= 3
+            model += lpSum(is_in_squad[i] for i in df.index if int(df.loc[i, 'team_code']) == team_id) <= 3
         
         # Solve
         status = model.solve()
@@ -274,11 +284,11 @@ class FPLEntryService:
                     "web_name": player['web_name'],
                     "team": int(player['team']),
                     "position": int(player['element_type']),
-                    "cost": player['now_cost'],
-                    "ep_next": player['ep_next']
+                    "cost": float(player['now_cost']),
+                    "ep_next": float(player['ep_next'])
                 })
         
-        new_squad_ids = [df.loc[i, 'id'] for i in df.index if is_in_squad[i].varValue == 1]
+        new_squad_ids = [int(df.loc[i, 'id']) for i in df.index if is_in_squad[i].varValue == 1]
         transfer_out = []
         for old_id in current_team_ids:
             if old_id not in new_squad_ids:
@@ -288,7 +298,8 @@ class FPLEntryService:
                     "web_name": player['web_name'],
                     "team": int(player['team']),
                     "position": int(player['element_type']),
-                    "cost": player['now_cost']
+                    "cost": float(player['now_cost']),
+                    "ep_next": float(player['ep_next'])
                 })
         
         return {
@@ -296,5 +307,7 @@ class FPLEntryService:
             "optimization_status": "success" if status == 1 else "failed",
             "transfer_in": transfer_in,
             "transfer_out": transfer_out,
-            "expected_points_gain": sum(p['ep_next'] for p in transfer_in) if transfer_in else 0
+            "expected_points_gain": (
+                sum(p['ep_next'] for p in transfer_in) - sum(p.get('ep_next', 0) for p in transfer_out)
+            ) if transfer_in and transfer_out else 0
         }
