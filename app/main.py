@@ -8,7 +8,7 @@ app = FastAPI(title="FPL Entry API", description="An API to fetch and analyse Fa
     "url": "https://github.com/am1520x/FPL_API",
 })
 
-app.mount("/images", StaticFiles(directory="images"), name="images")
+app.mount("/images", StaticFiles(directory="app/images"), name="images")
 app.include_router(router)
 
 @app.get("/")
