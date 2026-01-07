@@ -6,7 +6,7 @@ router = APIRouter(prefix="/strategy", tags=["strategy"])
 
 service = FPLEntryService()
 
-@router.get("/{entry_id}/optimize-transfer")
+@router.get("/{entry_id}/optimize-transfer", description="Suggest optimal 1 free transfer to maximize expected points for next gameweek.")
 def optimize_transfer(entry_id: int, gameweek: Optional[int] = None):
     """
     Suggests optimal 1 free transfer to maximize expected points for next gameweek.

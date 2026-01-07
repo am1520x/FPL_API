@@ -11,5 +11,5 @@ app.include_router(router)
 
 @app.get("/")
 def root():
-    return {"name": "FPL Entry API", "docs": "/docs"}
+    return {"name": "FPL API, providing Fantasy Premier League data and analysis", "docs": "/docs"}
 

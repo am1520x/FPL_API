@@ -15,8 +15,12 @@ fpl_service = FPLEntryService()
 insights_service = InsightsService(fpl_service, bootstrap_cache=bootstrap.get())
 
 
-@router.get("/{entry_id}/insights", response_model=List[Dict[str, Any]])
+@router.get("/{entry_id}/insights", response_model=List[Dict[str, Any]], description="Generate insights for an entry for a given gameweek and horizon.")
 def get_insights(entry_id: int, gw: int | None = None, horizon: int = 5):
+    """
+    Generate insights for an entry for a given gameweek and horizon.
+    **entry_id**: FPL manager ID
+    """
     try:
         fpl_service = FPLEntryService()
 
@@ -48,7 +52,4 @@ def get_insights(entry_id: int, gw: int | None = None, horizon: int = 5):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# insights_service = InsightsService(fpl_service, bootstrap_cache=bootstrap.get())
 
